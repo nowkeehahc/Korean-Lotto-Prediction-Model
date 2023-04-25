@@ -1,0 +1,54 @@
+import warnings
+import requests
+from datetime import datetime
+from tqdm.notebook import tqdm
+import pandas as pd
+from bs4 import BeautifulSoup
+
+# Do not display warning messages
+warnings.filterwarnings('ignore')
+
+# Function to crawl the latest lottery drawing count
+def get_max_count():
+    url = 'https://dhlottery.co.kr/common.do?method=main'
+    html = requests.get(url).text
+    soup = BeautifulSoup(html, 'lxml')
+    max_count = int(soup.find('strong', id='lottoDrwNo').text)
+    return max_count
+
+
+# Function to crawl lottery winning numbers information
+def crawling_lotto(count):
+    # Use the drawing count to get the corresponding webpage
+    url = f'https://dhlottery.co.kr/gameResult.do?method=byWin&drwNo={count}'
+    html = requests.get(url).text
+    soup = BeautifulSoup(html, 'lxml')
+    
+    date = datetime.strptime(soup.find('p', class_='desc').text, '(%Y년 %m월 %d일 추첨)')
+    win_number = [int(i) for i in soup.find('div', class_='num win').find('p').text.strip().split('\n')]
+    bonus_number = int(soup.find('div', class_='num bonus').find('p').text.strip())
+    
+    return {
+        'date': date, 
+        'win_number': win_number, 
+        'bonus_number': bonus_number
+    }
+
+# Get the latest drawing count
+max_count = get_max_count()
+# Crawl data for all lottery drawings
+data = pd.DataFrame()
+for i in tqdm(range(1, max_count+1)):
+    result = crawling_lotto(i)
+    data = data.append({'date': result['date'],
+                        'num1': result['win_number'][0],
+                        'num2': result['win_number'][1],
+                        'num3': result['win_number'][2],
+                        'num4': result['win_number'][3],
+                        'num5': result['win_number'][4],
+                        'num6': result['win_number'][5],
+                        'bonus': result['bonus_number'],
+                       }, ignore_index=True)
+data
+
+data.to_csv('lotto.csv', index=False)
